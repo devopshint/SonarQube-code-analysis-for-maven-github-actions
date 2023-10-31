@@ -52,7 +52,7 @@ jobs:
           jira_issue_data='{
             "fields": {
               "project": {
-                "key": "YOUR_PROJECT_KEY"
+                "key": "DEV/boards/1"
               },
               "issuetype": {
                 "name": "Bug"
@@ -64,5 +64,5 @@ jobs:
           curl -X POST -H "Authorization: Basic $JIRA_API_TOKEN" -H "Content-Type: application/json" --data "$jira_issue_data" https://your-jira-instance/rest/api/2/issue/
         env:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          YOUR_PROJECT_KEY: "Your_Project_Key"
-          YOUR_JIRA_INSTANCE: "https://your-jira-instance"
+          YOUR_PROJECT_KEY: "DEV/boards/1"
+          YOUR_JIRA_INSTANCE: "https://arshu-test.atlassian.net/jira/software/projects/DEV/boards/1"
