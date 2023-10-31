@@ -1,37 +1,68 @@
-name: Build
+name: SonarQube Security Scan
+
 on:
   push:
     branches:
-      - main # the name of your main branch
-  pull_request:
-    types: [opened, synchronize, reopened]
+      - main
+
 jobs:
-  build:
-    name: Build
+  sonarqube:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Set up JDK 17
-        uses: actions/setup-java@v1
-        with:
-          java-version: 17
-      - name: Cache SonarQube packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-      - name: Cache Maven packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-      - name: Build and analyze
+          java-version: 11
+
+      - name: SonarQube Scan
+        run: |
+          ./gradlew sonarqube
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+
+      - name: Get SonarQube Analysis Report
+        run: |
+          curl -o sonarqube-report.json $SONAR_HOST_URL/api/qualitygates/project_status?projectKey=your-project-key
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Check for Security Issues
+        run: |
+          # Parse SonarQube report and check for security issues
+          security_issues=$(jq -r '.projectStatus.conditions[] | select(.metricKey == "security_rating" and .status == "ERROR") | .actualValue' sonarqube-report.json)
+          if [ -n "$security_issues" ]; then
+            echo "Security issues found: $security_issues"
+            # Create a Jira issue using the Jira API (see the next step)
+          else
+            echo "No security issues found."
+          fi
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Create Jira Issue
+        if: ${{ success() && env.security_issues }}
+        run: |
+          # Create a Jira issue using the Jira API
+          # Replace the placeholders with your Jira project key and issue details
+          jira_issue_data='{
+            "fields": {
+              "project": {
+                "key": "YOUR_PROJECT_KEY"
+              },
+              "issuetype": {
+                "name": "Bug"
+              },
+              "summary": "Security Issue Found",
+              "description": "A security issue was found in the code during SonarQube analysis."
+            }
+          }'
+          curl -X POST -H "Authorization: Basic $JIRA_API_TOKEN" -H "Content-Type: application/json" --data "$jira_issue_data" https://your-jira-instance/rest/api/2/issue/
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          YOUR_PROJECT_KEY: "Your_Project_Key"
+          YOUR_JIRA_INSTANCE: "https://your-jira-instance"
